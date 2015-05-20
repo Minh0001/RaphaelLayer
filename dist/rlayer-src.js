@@ -1,10 +1,14 @@
 /*
- RaphaelLayer, a JavaScript library for overlaying Raphael objects onto Leaflet interactive maps. http://dynmeth.github.com/RaphaelLayer
+ RaphaelLayer, a JavaScript library for overlaying Raphael objects onto Leaflet interactive maps.
+
+ Original work http://dynmeth.github.com/RaphaelLayer
  (c) 2012-2013, David Howell, Dynamic Methods Pty Ltd
 
- Version 0.1.3
-*/
+ Modified work https://github.com/Minh0001/RaphaelLayer
+ Original work (c) 2015, Minh0001
 
+ Version 0.1.4
+*/
 (function() {
 
 var R, originalR;
@@ -27,87 +31,91 @@ if (typeof exports != 'undefined') {
 R.version = '0.1.3';
 
 R.Layer = L.Class.extend({
-	includes: L.Mixin.Events,
-	
-	initialize: function(options) {
-		
-	},
+  includes: L.Mixin.Events,
 
-	onAdd: function (map) {
-		this._map = map;
-		this._map._initRaphaelRoot();
-		this._paper = this._map._paper;
-		this._set = this._paper.set();
-		
-		map.on('viewreset', this.projectLatLngs, this);
-		this.projectLatLngs();
-	},
+  initialize: function(options) {
 
-	onRemove: function(map) {
-		map.off('viewreset', this.projectLatLngs, this);
-		this._map = null;
-		this._set.forEach(function(item) {
-			item.remove();
-		}, this);
-		this._set.clear();
-	},
+  },
 
-	projectLatLngs: function() {
-		
-	},
+  onAdd: function(map) {
+    this._map = map;
+    this._map._initRaphaelRoot();
+    this._paper = this._map._paper;
+    this._set = this._paper.set();
 
-	animate: function(attr, ms, easing, callback) {
-		this._set.animate(attr, ms, easing, callback);
-	
-		return this;
-	},
+    map.on('viewreset', this.projectLatLngs, this);
+    this.projectLatLngs();
+  },
 
-	hover: function(f_in, f_out, icontext, ocontext) {
-		this._set.hover(f_in, f_out, icontext, ocontext);
+  onRemove: function(map) {
+    map.off('viewreset', this.projectLatLngs, this);
+    this._map = null;
+    this._set.forEach(function(item) {
+      item.remove();
+    }, this);
+    this._set.clear();
+  },
 
-		return this;
-	},
+  projectLatLngs: function() {
 
-	attr: function(name, value) {
-		this._set.attr(name, value);
+  },
 
-		return this;
-	}
+  animate: function(attr, ms, easing, callback) {
+    this._set.animate(attr, ms, easing, callback);
+
+    return this;
+  },
+
+  hover: function(f_in, f_out, icontext, ocontext) {
+    this._set.hover(f_in, f_out, icontext, ocontext);
+
+    return this;
+  },
+
+  attr: function(name, value) {
+    this._set.attr(name, value);
+
+    return this;
+  }
 });
 
 L.Map.include({
-	_initRaphaelRoot: function () {
-		if (!this._raphaelRoot) {
-			this._raphaelRoot = this._panes.overlayPane;
-			this._paper = Raphael(this._raphaelRoot);
+  _initRaphaelRoot: function() {
+    if (!this._raphaelRoot) {
+      this._raphaelRoot = L.DomUtil.create('div', 'rapahel-layer');
+      this._paper = Raphael(this._raphaelRoot);
 
-			this.on('moveend', this._updateRaphaelViewport);
-			this._updateRaphaelViewport();
-		}
-	},
+      var animated = false;
+      L.DomUtil.addClass(this._raphaelRoot, 'leaflet-zoom-' + (animated ?
+        'animated' : 'hide'));
 
-	_updateRaphaelViewport: function () {
-		var	p = 0.02,
-			size = this.getSize(),
-			panePos = L.DomUtil.getPosition(this._mapPane),
-			min = panePos.multiplyBy(-1)._subtract(size.multiplyBy(p)),
-			max = min.add(size.multiplyBy(1 + p*2)),
-			width = max.x - min.x,
-			height = max.y - min.y,
-			root = this._raphaelRoot,
-			pane = this._panes.overlayPane;
+      this._panes.overlayPane.appendChild(this._raphaelRoot);
 
-		this._paper.setSize(width, height);
-		
-		L.DomUtil.setPosition(root, min);
+      this.on('moveend', this._updateRaphaelViewport);
 
-		root.setAttribute('width', width);
-		root.setAttribute('height', height);
-		
-		this._paper.setViewBox(min.x, min.y, width, height, false);
-		
-	}
+      this._updateRaphaelViewport();
+    }
+  },
+
+  _updateRaphaelViewport: function() {
+    var p = 0.00,
+      size = this.getSize(),
+      panePos = L.DomUtil.getPosition(this._mapPane),
+      min = panePos.multiplyBy(-1)._subtract(size.multiplyBy(p)),
+      max = min.add(size.multiplyBy(1 + p * 2)),
+      width = max.x - min.x,
+      height = max.y - min.y,
+      root = this._raphaelRoot;
+
+    console.log('reset raphael', size, panePos, min, max, width, height);
+
+    this._paper.setSize(width, height);
+    L.DomUtil.setPosition(root, min);
+    this._paper.setViewBox(min.x, min.y, width, height, false);
+
+  }
 });
+
 
 R.Marker = R.Layer.extend({
 	initialize: function(latlng, pathString, attr, options) {
@@ -285,6 +293,201 @@ R.PolygonGlow = R.Layer.extend({
 		return str;
 	}
 });
+
+R.Arc = R.Layer.extend({
+	initialize: function(latlngs, attr, options) {
+		R.Layer.prototype.initialize.call(this, options);
+
+		this._latlngs = latlngs;
+		this._attr = attr;
+	},
+
+	onAdd: function(map) {
+		R.Layer.prototype.onAdd.call(this, map);
+	},
+
+	projectLatLngs: function() {
+		if (!this._paper.customAttributes.arc) {
+			this._paper.customAttributes.arc = function(xloc, yloc, value, total, R) {
+				var alpha = 360 / total * value,
+					a = (90 - alpha) * Math.PI / 180,
+					x = xloc + R * Math.cos(a),
+					y = yloc - R * Math.sin(a),
+					path;
+				if (total == value) {
+					path = [
+						["M", xloc, yloc - R],
+						["A", R, R, 0, 1, 1, xloc - 0.01, yloc - R]
+					];
+				} else {
+					path = [
+						["M", xloc, yloc - R],
+						["A", R, R, 0, +(alpha > 180), 1, x, y]
+					];
+				}
+				return {
+					path: path
+				};
+			};
+		}
+
+		if (this._path) {
+			this._path.remove();
+		}
+
+		var start = this._map.latLngToLayerPoint(this._latlngs[0]),
+			end = this._map.latLngToLayerPoint(this._latlngs[1]),
+			cp = this.getControlPoint(start, end),
+			length = this.getLength(start, end),
+			angle = this.getAngle(start, end);
+
+		this.controlPoint = cp;
+		this.angle = angle;
+
+		this._attr = {
+			"stroke": "#f00",
+			"stroke-width": (0.5 * this._map.getZoom())
+		};
+		this._attr.arc = [cp.x, cp.y, 50, 100, length / 2];
+		this._path = this._paper.path();
+		this._path.attr(this._attr);
+		this._path.rotate(angle, cp.x, cp.y);
+		this._path.toBack();
+
+		this._set.push(this._path);
+	},
+
+	getControlPoint: function(start, end) {
+		var cp = {
+			x: 0,
+			y: 0
+		};
+		cp.x = start.x + (end.x - [start.x]) / 2;
+		cp.y = start.y + (end.y - [start.y]) / 2;
+		return cp;
+	},
+
+	getLength: function(start, end) {
+		var length = Math.sqrt(Math.pow(end.x - [start.x], 2) + Math.pow(end.y - [
+			start.y
+		], 2));
+		return length;
+	},
+
+	getAngle: function(start, end) {
+		var deltaX = end.x - start.x;
+		var deltaY = end.y - start.y;
+		var angle = Math.atan(deltaY / deltaX) * 180 / Math.PI;
+		while (angle < 0) {
+			angle += 360;
+		}
+		if (angle < 90) {
+			angle += 180;
+		}
+		angle = angle + 90;
+		return angle;
+	}
+});
+
+
+R.ArcAnim = R.Layer.extend({
+	initialize: function(latlngs, attr, options) {
+		R.Layer.prototype.initialize.call(this, options);
+
+		this._latlngs = latlngs;
+		this._attr = attr;
+	},
+
+	onAdd: function(map) {
+		R.Layer.prototype.onAdd.call(this, map);
+	},
+
+	projectLatLngs: function() {
+		if (!this._paper.customAttributes.arc) {
+			this._paper.customAttributes.arc = function(xloc, yloc, value, total, R) {
+				var alpha = 360 / total * value,
+					a = (90 - alpha) * Math.PI / 180,
+					x = xloc + R * Math.cos(a),
+					y = yloc - R * Math.sin(a),
+					path;
+				if (total == value) {
+					path = [
+						["M", xloc, yloc - R],
+						["A", R, R, 0, 1, 1, xloc - 0.01, yloc - R]
+					];
+				} else {
+					path = [
+						["M", xloc, yloc - R],
+						["A", R, R, 0, +(alpha > 180), 1, x, y]
+					];
+				}
+				return {
+					path: path
+				};
+			};
+		}
+
+		if (this._path) {
+			this._path.remove();
+		}
+
+		var start = this._map.latLngToLayerPoint(this._latlngs[0]),
+			end = this._map.latLngToLayerPoint(this._latlngs[1]),
+			cp = this.getControlPoint(start, end),
+			length = this.getLength(start, end),
+			angle = this.getAngle(start, end);
+
+		this.controlPoint = cp;
+		this.angle = angle;
+
+		this._attr = {
+			"stroke": "#f00",
+			"stroke-width": (0.5 * this._map.getZoom())
+		};
+		this._attr.arc = [cp.x, cp.y, 0, 100, length / 2];
+		this._path = this._paper.path();
+		this._path.attr(this._attr);
+		this._path.rotate(angle, cp.x, cp.y);
+		this._path.toBack();
+		this._path.animate({
+			arc: [cp.x, cp.y, 50, 100, length / 2]
+		}, 200, "bounce");
+
+		this._set.push(this._path);
+	},
+
+	getControlPoint: function(start, end) {
+		var cp = {
+			x: 0,
+			y: 0
+		};
+		cp.x = start.x + (end.x - [start.x]) / 2;
+		cp.y = start.y + (end.y - [start.y]) / 2;
+		return cp;
+	},
+
+	getLength: function(start, end) {
+		var length = Math.sqrt(Math.pow(end.x - [start.x], 2) + Math.pow(end.y - [
+			start.y
+		], 2));
+		return length;
+	},
+
+	getAngle: function(start, end) {
+		var deltaX = end.x - start.x;
+		var deltaY = end.y - start.y;
+		var angle = Math.atan(deltaY / deltaX) * 180 / Math.PI;
+		while (angle < 0) {
+			angle += 360;
+		}
+		if (angle < 90) {
+			angle += 180;
+		}
+		angle = angle + 90;
+		return angle;
+	}
+});
+
 
 R.Bezier = R.Layer.extend({
 	initialize: function(latlngs, attr, options) {
